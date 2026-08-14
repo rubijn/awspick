@@ -1,0 +1,62 @@
+# Shapes copied from a real 92-profile estate, values replaced.
+
+[profile default]
+region = eu-west-1   # inline comment must not become part of the value
+output = json
+
+[sso-session Corp_SSO]
+sso_start_url = https://d-example1.awsapps.com/start
+sso_region = eu-west-1
+sso_registration_scopes = sso:account:access
+
+[sso-session other-sso]
+sso_start_url = https://d-example2.awsapps.com/start
+sso_region = us-east-1
+
+[profile prod-admin]
+sso_session = Corp_SSO
+sso_account_id = 111111111111
+sso_role_name = AdministratorAccess
+region = eu-west-3
+cli_pager =
+
+[profile dev-observability]
+sso_session = Corp_SSO
+sso_account_id = 222222222222
+sso_role_name = ObservabilityEngineers
+region = eu-west-1
+
+; a session with no region of its own on the profile: falls back to sso_region
+[profile no-region-sso]
+sso_session = other-sso
+sso_account_id = 777777777777
+sso_role_name = ReadOnly
+
+[profile legacy-sso]
+sso_start_url = https://legacy.awsapps.com/start
+sso_region = us-east-1
+sso_account_id = 333333333333
+sso_role_name = ReadOnly
+
+[profile nested-settings]
+region = us-east-1
+s3 =
+  addressing_style = path
+  use_accelerate_endpoint = true
+max_attempts = 5
+
+[profile inherits-region]
+role_arn = arn:aws:iam::444444444444:role/team/DeployRole
+source_profile = prod-admin
+
+[profile cyclic-a]
+role_arn = arn:aws:iam::555555555555:role/A
+source_profile = cyclic-b
+
+[profile cyclic-b]
+role_arn = arn:aws:iam::555555555555:role/B
+source_profile = cyclic-a
+
+[services my-services]
+s3 =
+  endpoint_url = https://example.invalid

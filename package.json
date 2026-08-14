@@ -1,0 +1,40 @@
+{
+  "name": "awspick",
+  "version": "0.1.0",
+  "description": "Interactive picker for AWS_PROFILE and AWS_REGION, driven by your real ~/.aws config",
+  "keywords": ["aws", "profile", "region", "sso", "cli", "switcher", "awsx"],
+  "license": "MIT",
+  "author": "Julien Bennamias",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rubijn/awspick.git"
+  },
+  "homepage": "https://github.com/rubijn/awspick#readme",
+  "bugs": "https://github.com/rubijn/awspick/issues",
+  "type": "module",
+  "bin": {
+    "awsx": "dist/index.js"
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "node src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.ts",
+    "check": "npm run typecheck && npm test && npm run build && publint",
+    "prepublishOnly": "npm run check"
+  },
+  "dependencies": {
+    "@inquirer/confirm": "^6.0.0",
+    "@inquirer/search": "^4.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "publint": "^0.3.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.0"
+  }
+}
