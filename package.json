@@ -1,8 +1,16 @@
 {
   "name": "awspick",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Interactive picker for AWS_PROFILE and AWS_REGION, driven by your real ~/.aws config",
-  "keywords": ["aws", "profile", "region", "sso", "cli", "switcher", "awsx"],
+  "keywords": [
+    "aws",
+    "profile",
+    "region",
+    "sso",
+    "cli",
+    "switcher",
+    "awsx"
+  ],
   "license": "MIT",
   "author": "Julien Bennamias",
   "repository": {
@@ -15,7 +23,11 @@
   "bin": {
     "awsx": "dist/index.js"
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=20"
   },
