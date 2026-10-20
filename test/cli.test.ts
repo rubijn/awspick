@@ -208,7 +208,8 @@ test('--help and --version do not touch AWS config at all', async () => {
   assert.equal(help.code, 0);
   assert.match(help.stderr, /interactive AWS_PROFILE/);
   const version = await awsx(['--version'], { AWS_CONFIG_FILE: '/nonexistent' });
-  assert.match(version.stdout.trim(), /^\d+\.\d+\.\d+$/);
+  const pkg = JSON.parse(readFileSync(join(here, '..', 'package.json'), 'utf8')) as { version: string };
+  assert.equal(version.stdout.trim(), pkg.version);
 });
 
 // `aws sso login` prints the verification URL on stdout; the wrapper evals stdout,

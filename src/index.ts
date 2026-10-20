@@ -6,6 +6,7 @@
  */
 
 import { parseArgs } from 'node:util';
+import pkg from '../package.json' with { type: 'json' };
 import {
   AwsCliMissingError,
   callerIdentity,
@@ -36,7 +37,8 @@ import {
   type AwsxConfig,
 } from './store.ts';
 
-const VERSION = '0.1.0';
+// Inlined into dist/index.js at build time, so `npm version` is the only place to bump.
+const VERSION = pkg.version;
 
 const USAGE = `${bold('awsx')} — interactive AWS_PROFILE / AWS_REGION switcher
 
