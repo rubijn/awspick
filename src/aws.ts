@@ -150,13 +150,17 @@ export async function callerIdentity(
   }
 }
 
-/** Interactive: inherits the terminal so the device-code flow and browser work. */
+/**
+ * Interactive: inherits the terminal so the device-code flow and browser work.
+ * The CLI prints the verification URL on stdout, which the wrapper evals — the
+ * `&` in its query string is a shell parse error — so its stdout goes to stderr.
+ */
 export function ssoLogin(session: string | undefined, profile: string | undefined): Promise<number> {
   const args = ['sso', 'login'];
   if (session) args.push('--sso-session', session);
   else if (profile) args.push('--profile', profile);
   return new Promise((resolve, reject) => {
-    const child = spawn(AWS_BIN, args, { stdio: 'inherit', env: cleanEnv() });
+    const child = spawn(AWS_BIN, args, { stdio: ['inherit', process.stderr, 'inherit'], env: cleanEnv() });
     child.on('error', (err) => {
       reject((err as NodeJS.ErrnoException).code === 'ENOENT' ? new AwsCliMissingError() : err);
     });

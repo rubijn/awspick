@@ -6,7 +6,7 @@
 
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
@@ -209,6 +209,18 @@ test('--help and --version do not touch AWS config at all', async () => {
   assert.match(help.stderr, /interactive AWS_PROFILE/);
   const version = await awsx(['--version'], { AWS_CONFIG_FILE: '/nonexistent' });
   assert.match(version.stdout.trim(), /^\d+\.\d+\.\d+$/);
+});
+
+// `aws sso login` prints the verification URL on stdout; the wrapper evals stdout,
+// and the `&` in that URL is a shell parse error.
+test('sso login output never reaches stdout', async () => {
+  const bin = join(mkdtempSync(join(tmpdir(), 'awsx-fake-aws-')), 'aws');
+  writeFileSync(bin, '#!/bin/sh\necho "open https://device.sso.example/?user_code=AB-CD&x=1"\n');
+  chmodSync(bin, 0o755);
+  const run = await awsx(['login', '--profile', 'prod-admin'], { AWSX_AWS_BIN: bin });
+  assert.equal(run.code, 0);
+  assert.equal(run.stdout, '');
+  assert.match(run.stderr, /user_code=AB-CD&x=1/);
 });
 
 // The oracle: our parser must see exactly what the AWS CLI sees.
