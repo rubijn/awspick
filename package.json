@@ -1,6 +1,6 @@
 {
   "name": "awspick",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Interactive picker for AWS_PROFILE and AWS_REGION, driven by your real ~/.aws config",
   "keywords": [
     "aws",
