@@ -116,6 +116,7 @@ const invalid: Array<[string, (doc: any) => void, RegExp]> = [
   ['session on a non-SSO profile', (d) => (d.profiles[4].session = 'corp'), /session without account_id/],
   ['unknown source_profile', (d) => (d.profiles[5].extra.source_profile = 'ghost'), /source_profile "ghost"/],
   ['reserved key in extra', (d) => (d.profiles[0].extra = { region: 'eu-west-1' }), /"region" goes in its own field/],
+  ['SSO key in extra next to account_id', (d) => (d.profiles[0].extra = { sso_role_name: 'X' }), /"sso_role_name" goes in its own field/],
   ['secret in extra', (d) => (d.profiles[0].extra = { aws_secret_access_key: 'x' }), /credential material/],
   ['secret in a sub-map', (d) => (d.profiles[0].extra = { s3: { aws_session_token: 'x' } }), /credential material/],
   ['secret in defaults', (d) => (d.defaults.aws_access_key_id = 'x'), /credential material/],
@@ -142,6 +143,16 @@ test('reports every problem in one pass, not just the first', () => {
     d.defaults.aws_access_key_id = 'x';
   });
   assert.equal(errors.length, 3, JSON.stringify(errors));
+});
+
+test('legacy inline SSO keys are allowed in extra when the profile has no account_id', () => {
+  const errors = errorsAfter((d) =>
+    d.profiles.push({
+      name: 'legacy',
+      extra: { sso_start_url: 'https://legacy.awsapps.com/start', sso_region: 'us-east-1', sso_account_id: '666666666666', sso_role_name: 'ReadOnly' },
+    }),
+  );
+  assert.deepEqual(errors, []);
 });
 
 test('a source_profile outside the catalog needs to be declared external', () => {

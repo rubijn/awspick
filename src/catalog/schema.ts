@@ -225,8 +225,12 @@ export function validateCatalog(
     if (p.extra !== undefined) {
       checkMap(`${where} extra`, p.extra, errors, true);
       if (isRecord(p.extra)) {
-        for (const reserved of ['sso_session', 'sso_account_id', 'sso_role_name', 'region']) {
-          if (reserved in p.extra) errors.push(`${where}: "${reserved}" goes in its own field, not in extra`);
+        // With account_id, the SSO keys are generated from the fields. Without it
+        // (legacy inline SSO, or a profile only used for `aws sso login`) they
+        // live in extra like any other key.
+        const reserved = hasAccount ? ['sso_session', 'sso_account_id', 'sso_role_name', 'region'] : ['region'];
+        for (const key of reserved) {
+          if (key in p.extra) errors.push(`${where}: "${key}" goes in its own field, not in extra`);
         }
         const source = p.extra.source_profile;
         if (
