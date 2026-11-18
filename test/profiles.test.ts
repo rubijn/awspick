@@ -30,6 +30,7 @@ test('finds every profile from both files, and no sso-session or services blocks
       'nested-settings',
       'no-region-sso',
       'prod-admin',
+      'split-region',
       'static-keys',
     ],
   );
@@ -38,6 +39,14 @@ test('finds every profile from both files, and no sso-session or services blocks
 test('merges [profile default] from config with [default] from credentials', () => {
   const profile = byName().get('default');
   assert.equal(profile?.region, 'eu-west-1');
+  assert.deepEqual(profile?.sources.sort(), ['config', 'credentials']);
+});
+
+test('credentials wins over config for every key, region included', () => {
+  const profile = byName().get('split-region');
+  assert.equal(profile?.region, 'eu-central-1');
+  assert.equal(profile?.regionInherited, false);
+  assert.equal(profile?.accountId, '888888888888'); // config-only keys still apply
   assert.deepEqual(profile?.sources.sort(), ['config', 'credentials']);
 });
 

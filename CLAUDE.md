@@ -96,7 +96,7 @@ delegated (`src/aws.ts`) versus parsed in-process:
 `src/ini.ts` parses the AWS shared-config dialect (not general INI): `[profile X]` in
 config vs bare `[X]` in credentials, `[sso-session X]` blocks, indented sub-maps,
 `#`/`;` comments. `src/profiles.ts` merges both files into the `Profile` model —
-credentials wins for credential keys, config wins for `region`; `sso_session` is
+credentials wins for every key, `region` included (as in the CLI); `sso_session` is
 resolved to its start URL; `role_arn` yields account + role; `region` walks the
 `source_profile` chain with a cycle guard and sets `regionInherited`. `src/sso.ts`
 indexes `~/.aws/sso/cache/*.json` **by the `startUrl` field inside each file** (the
