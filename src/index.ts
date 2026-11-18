@@ -5,6 +5,7 @@
  * in a latency-sensitive binary (ADR-0001, "Node/TypeScript conventions").
  */
 
+import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import pkg from '../package.json' with { type: 'json' };
 import {
@@ -26,6 +27,8 @@ import {
   pickRegion,
 } from './picker.ts';
 import { profilesCommand } from './catalog/command.ts';
+import { catalogChecks } from './catalog/doctor.ts';
+import { awsConfigPath, awsCredentialsPath, catalogPath } from './paths.ts';
 import { loadAwsFiles, resolveProfiles, type Profile } from './profiles.ts';
 import { bold, cyan, describe, dim, green, red, yellow } from './render.ts';
 import { detectShell, initScript, installHint, isShell, renderEnv, selectionEnv, SHELLS, wrapperActive } from './shell.ts';
@@ -612,6 +615,25 @@ async function doctor(ctx: Ctx): Promise<number> {
   ok('aws config', `${ctx.profiles.length} profiles from ~/.aws`);
   ok('awsx config', ctx.configPath);
   if (ctx.config.lastProfile) ok('last profile', ctx.config.lastProfile);
+
+  // Catalog checks (ADR-0002): file reads only, no AWS call.
+  const text = (path: string) => {
+    try {
+      return readFileSync(path, 'utf8');
+    } catch {
+      return '';
+    }
+  };
+  const staticNames = new Set(ctx.profiles.filter((p) => p.kind === 'static').map((p) => p.name));
+  for (const check of catalogChecks({
+    catalogPath: catalogPath(),
+    configText: text(awsConfigPath()),
+    credentialsText: text(awsCredentialsPath()),
+    staticProfiles: staticNames,
+    profiles: ctx.profiles,
+  })) {
+    (check.level === 'ok' ? ok : check.level === 'warn' ? warn : bad)(check.label, check.detail);
+  }
 
   // The AWS CLI is the oracle: any disagreement is a parser gap worth seeing.
   try {
