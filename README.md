@@ -122,4 +122,4 @@ test compares the parser against `aws configure list-profiles` on fixture files
 and skips itself if the AWS CLI is absent.
 
 Design rationale, including the options that were rejected, is in the repository at
-`docs/adr/ADR-0001-aws-profile-region-switcher.md` (not shipped in the npm tarball).
+`.ai/adr/ADR-0001-aws-profile-region-switcher.md` (not shipped in the npm tarball).
