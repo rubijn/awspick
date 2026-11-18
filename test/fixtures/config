@@ -57,6 +57,12 @@ source_profile = cyclic-b
 role_arn = arn:aws:iam::555555555555:role/B
 source_profile = cyclic-a
 
+; also in credentials with another region: the credentials value wins, as in the CLI
+[profile split-region]
+role_arn = arn:aws:iam::888888888888:role/Split
+source_profile = static-keys
+region = eu-west-1
+
 [services my-services]
 s3 =
   endpoint_url = https://example.invalid

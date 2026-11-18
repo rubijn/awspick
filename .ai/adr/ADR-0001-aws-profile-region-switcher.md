@@ -245,7 +245,8 @@ The quirks that must be handled, all present in this machine's files:
 - `[sso-session NAME]` blocks holding `sso_start_url` / `sso_region` / `sso_registration_scopes`, referenced by profiles via `sso_session`.
 - Indented continuation sub-keys (nested maps) must not be read as top-level keys.
 - Role chains: `role_arn` + `source_profile` (37 profiles here) — the effective account is in the ARN, not in `sso_account_id`.
-- Precedence: `credentials` wins over `config` for credential keys; `config` supplies `region` and non-credential settings.
+- Precedence: when a profile is in both files, `credentials` wins for **every** key, `region` included. *(Amended 2026-11-18 by [ADR-0002](ADR-0002-profile-catalog.md): this line used to say that `config` supplies `region`, which is wrong — botocore merges the credentials profile over the config profile, and `aws configure get region` returns the credentials value. Now pinned by a differential test.)*
+- Inline comments: `region = eu-west-1  # note` is read as `eu-west-1`. The CLI keeps the comment as part of the value; this is a deliberate deviation, accepted in the differential test.
 - Both files are `0600`; never log their values, never write them back.
 
 Vendoring the parser keeps runtime deps at ~2 packages (the prompt library), which

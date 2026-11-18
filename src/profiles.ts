@@ -88,9 +88,10 @@ type RawProfile = {
 /**
  * Collect raw profile sections from both files.
  *
- * Precedence: the credentials file wins for the keys it is allowed to define
- * (credential material), the config file wins for everything else — notably
- * `region`, which some people also put in credentials where the CLI ignores it.
+ * Precedence: when a profile is in both files, the credentials file wins for
+ * every key, `region` included. botocore merges the credentials profile over the
+ * config profile, and `aws configure get region` (aws-cli 2.34.30) returns the
+ * credentials value. The differential test in test/cli.test.ts pins this.
  */
 function collectRaw(files: AwsFiles): Map<string, RawProfile> {
   const out = new Map<string, RawProfile>();
@@ -105,20 +106,21 @@ function collectRaw(files: AwsFiles): Map<string, RawProfile> {
     return entry;
   };
 
-  for (const [header, section] of files.credentials) {
-    const { type, name } = splitHeader(header);
-    // Tolerate a `[profile x]` header here even though the CLI would not.
-    const profileName = type === 'profile' ? name : header;
-    const entry = upsert(profileName, 'credentials');
-    Object.assign(entry.keys, section.keys);
-  }
-
   for (const [header, section] of files.config) {
     const { type, name } = splitHeader(header);
     if (type === 'sso-session') continue;
     const profileName = header === 'default' ? 'default' : type === 'profile' ? name : undefined;
     if (profileName === undefined) continue; // `[services x]`, `[plugins]`, ...
     const entry = upsert(profileName, 'config');
+    Object.assign(entry.keys, section.keys);
+  }
+
+  // Applied second, so its keys overwrite the config file's.
+  for (const [header, section] of files.credentials) {
+    const { type, name } = splitHeader(header);
+    // Tolerate a `[profile x]` header here even though the CLI would not.
+    const profileName = type === 'profile' ? name : header;
+    const entry = upsert(profileName, 'credentials');
     Object.assign(entry.keys, section.keys);
   }
 

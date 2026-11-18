@@ -249,3 +249,34 @@ test('resolveProfiles agrees with `aws configure list-profiles`', async (t) => {
 
   assert.deepEqual(mine, fromCli);
 });
+
+// Same oracle for region: for every profile that sets its own region, ours must
+// match `aws configure get region`, which settles which file wins on a conflict.
+test('resolved regions agree with `aws configure get region`', async (t) => {
+  try {
+    await execFileAsync('aws', ['--version']);
+  } catch {
+    return t.skip('AWS CLI not installed');
+  }
+
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    AWS_CONFIG_FILE: join(fixtures, 'config'),
+    AWS_SHARED_CREDENTIALS_FILE: join(fixtures, 'credentials'),
+  };
+  for (const key of ['AWS_PROFILE', 'AWS_REGION', 'AWS_DEFAULT_PROFILE', 'AWS_DEFAULT_REGION']) delete env[key];
+
+  const ours = await awsx(['list', '--json']);
+  const own = (JSON.parse(ours.stdout) as Array<{ name: string; region?: string; regionInherited: boolean }>)
+    .filter((p) => p.region !== undefined && !p.regionInherited);
+  assert.ok(own.some((p) => p.name === 'split-region'), 'fixture must cover a region conflict');
+
+  for (const profile of own) {
+    const { stdout } = await execFileAsync('aws', ['configure', 'get', 'region', '--profile', profile.name], { env });
+    // Known, deliberate deviation: the CLI keeps an inline `# comment` as part of
+    // the value (botocore's parser has no inline comment prefixes); src/ini.ts
+    // strips it. Compare the value before the comment.
+    const cli = stdout.trim().replace(/\s+[#;].*$/, '');
+    assert.equal(profile.region, cli, `region of ${profile.name}`);
+  }
+});
