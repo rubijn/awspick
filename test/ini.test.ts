@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { parseIni, splitHeader } from '../src/ini.ts';
+import { parseIni, sectionSpans, splitHeader } from '../src/ini.ts';
 
 test('parses section headers and key/value pairs', () => {
   const ini = parseIni('[profile foo]\nregion = eu-west-1\n');
@@ -46,4 +46,28 @@ test('splitHeader separates type from name', () => {
   assert.deepEqual(splitHeader('profile foo'), { type: 'profile', name: 'foo' });
   assert.deepEqual(splitHeader('sso-session My_SSO'), { type: 'sso-session', name: 'My_SSO' });
   assert.deepEqual(splitHeader('default'), { type: '', name: 'default' });
+});
+
+test('sectionSpans gives each header its line range and the comments just above it', () => {
+  const text = [
+    '########',
+    '# ACME',
+    '########',
+    '[profile a]',
+    'region = eu-west-1',
+    '',
+    '; note on b',
+    '[profile b]   # trailing',
+    'region = eu-west-3',
+    '# trailing comment of the file',
+  ].join('\n');
+  assert.deepEqual(sectionSpans(text), [
+    { header: 'profile a', line: 3, end: 7, comments: ['ACME'] },
+    { header: 'profile b', line: 7, end: 10, comments: ['note on b'] },
+  ]);
+});
+
+test('sectionSpans resets comments after a key, so a comment inside a section is not carried', () => {
+  const spans = sectionSpans(['[a]', '# about x', 'x = 1', '[b]'].join('\n'));
+  assert.deepEqual(spans.map((s) => s.comments), [[], []]);
 });

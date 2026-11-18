@@ -85,3 +85,44 @@ export function splitHeader(header: string): { type: string; name: string } {
   if (at === -1) return { type: '', name: header };
   return { type: header.slice(0, at), name: header.slice(at + 1).trim() };
 }
+
+export type SectionSpan = {
+  /** Header text as written, without brackets. */
+  header: string;
+  /** 0-based line of the header. */
+  line: number;
+  /** 0-based line where the next section's header (or the end of file) is. */
+  end: number;
+  /**
+   * Text of the comment lines between the previous section's last key and this
+   * header, `#`/`;` markers removed, empty ones dropped. `import` reads profile
+   * groups from these (ADR-0002); `parseIni()` discards them.
+   */
+  comments: string[];
+};
+
+/** Where each section sits in the text, with the comments just above it. */
+export function sectionSpans(text: string): SectionSpan[] {
+  const lines = text.split(/\r?\n/);
+  const spans: SectionSpan[] = [];
+  let pending: string[] = [];
+
+  lines.forEach((raw, index) => {
+    const line = raw.trim();
+    if (line === '') return;
+    if (line.startsWith('#') || line.startsWith(';')) {
+      const comment = line.replace(/^[#;]+/, '').trim();
+      if (comment !== '') pending.push(comment);
+      return;
+    }
+    const header = /^\[(.+)\]$/.exec(stripComment(raw).trim());
+    if (header) {
+      const previous = spans.at(-1);
+      if (previous) previous.end = index;
+      spans.push({ header: (header[1] as string).trim(), line: index, end: lines.length, comments: pending });
+    }
+    pending = [];
+  });
+
+  return spans;
+}

@@ -1,0 +1,60 @@
+{
+  "sso_sessions": {
+    "corp": {
+      "sso_start_url": "https://d-example1.awsapps.com/start",
+      "sso_region": "eu-west-1",
+      "sso_registration_scopes": "sso:account:access"
+    },
+    "partner": {
+      "sso_start_url": "https://d-example2.awsapps.com/start",
+      "sso_region": "us-east-1"
+    }
+  },
+  "defaults": { "sso_session": "corp", "cli_pager": "" },
+  "profiles": [
+    { "name": "sandbox", "account_id": "999999999999", "role": "PowerUserAccess" },
+    {
+      "name": "acme-prod-admin",
+      "group": "ACME",
+      "account_name": "acme-prod",
+      "account_id": "111111111111",
+      "role": "AdministratorAccess",
+      "region": "eu-west-3",
+      "extra": { "output": "json" },
+      "former_names": ["acme-prod-AdministratorAccess"]
+    },
+    {
+      "name": "partner-read",
+      "group": "PARTNER",
+      "account_id": "222222222222",
+      "role": "ReadOnlyAccess",
+      "session": "partner",
+      "region": "us-east-1"
+    },
+    {
+      "name": "acme-dev-admin",
+      "group": "ACME",
+      "account_name": "acme-dev",
+      "account_id": "333333333333",
+      "role": "AdministratorAccess",
+      "region": "eu-west-1",
+      "extra": { "s3": { "addressing_style": "path" }, "max_attempts": "5" }
+    },
+    {
+      "name": "ops-read",
+      "group": "ACME",
+      "region": "eu-west-1",
+      "extra": {
+        "role_arn": "arn:aws:iam::444444444444:role/team/Read",
+        "source_profile": "acme-prod-admin"
+      }
+    },
+    {
+      "name": "from-static",
+      "extra": { "role_arn": "arn:aws:iam::555555555555:role/Deploy", "source_profile": "ci-keys" }
+    }
+  ],
+  "sections": {
+    "services local-dev": { "s3": { "endpoint_url": "http://localhost:4566" } }
+  }
+}
