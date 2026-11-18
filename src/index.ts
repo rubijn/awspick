@@ -5,6 +5,7 @@
  * in a latency-sensitive binary (ADR-0001, "Node/TypeScript conventions").
  */
 
+import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import pkg from '../package.json' with { type: 'json' };
 import {
@@ -25,6 +26,9 @@ import {
   pickProfile,
   pickRegion,
 } from './picker.ts';
+import { profilesCommand } from './catalog/command.ts';
+import { catalogChecks } from './catalog/doctor.ts';
+import { awsConfigPath, awsCredentialsPath, catalogPath } from './paths.ts';
 import { loadAwsFiles, resolveProfiles, type Profile } from './profiles.ts';
 import { bold, cyan, describe, dim, green, red, yellow } from './render.ts';
 import { detectShell, initScript, installHint, isShell, renderEnv, selectionEnv, SHELLS, wrapperActive } from './shell.ts';
@@ -53,6 +57,7 @@ ${bold('Usage')}
   awsx exec -- <cmd>        run a command with the selection applied, no shell change
   awsx init <shell>         print the shell integration (${SHELLS.join(', ')})
   awsx doctor               check the AWS CLI, the shell wrapper and the config
+  awsx profiles <cmd>       manage ~/.aws/config from a JSON catalog (import, discover, apply)
 
 ${bold('Options')}
   --profile <name>          non-interactive profile selection
@@ -119,6 +124,9 @@ async function main(argv: string[]): Promise<number> {
     out(VERSION);
     return 0;
   }
+  // Before the picker's own loading: it reads and writes files of its own, and
+  // must not prune remembered profiles that a rename is about to carry over.
+  if (command === 'profiles') return profilesCommand(positionals[1], values);
 
   const loaded = loadConfig();
   if (loaded.warning) say(yellow(`warning: ${loaded.warning}`));
@@ -195,6 +203,13 @@ function splitArgs(argv: string[]): { values: Values; positionals: string[]; exe
       region: { type: 'string' },
       shell: { type: 'string' },
       format: { type: 'string' },
+      // awsx profiles
+      'dry-run': { type: 'boolean' },
+      adopt: { type: 'boolean' },
+      force: { type: 'boolean' },
+      'default-session': { type: 'string' },
+      offline: { type: 'boolean' },
+      session: { type: 'string' },
     },
   });
   return { values: values as Values, positionals, execArgs };
@@ -600,6 +615,25 @@ async function doctor(ctx: Ctx): Promise<number> {
   ok('aws config', `${ctx.profiles.length} profiles from ~/.aws`);
   ok('awsx config', ctx.configPath);
   if (ctx.config.lastProfile) ok('last profile', ctx.config.lastProfile);
+
+  // Catalog checks (ADR-0002): file reads only, no AWS call.
+  const text = (path: string) => {
+    try {
+      return readFileSync(path, 'utf8');
+    } catch {
+      return '';
+    }
+  };
+  const staticNames = new Set(ctx.profiles.filter((p) => p.kind === 'static').map((p) => p.name));
+  for (const check of catalogChecks({
+    catalogPath: catalogPath(),
+    configText: text(awsConfigPath()),
+    credentialsText: text(awsCredentialsPath()),
+    staticProfiles: staticNames,
+    profiles: ctx.profiles,
+  })) {
+    (check.level === 'ok' ? ok : check.level === 'warn' ? warn : bad)(check.label, check.detail);
+  }
 
   // The AWS CLI is the oracle: any disagreement is a parser gap worth seeing.
   try {

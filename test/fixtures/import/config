@@ -1,0 +1,66 @@
+# The shapes of a real estate before cleanup, values replaced.
+
+[sso-session corp]
+sso_start_url = https://d-example1.awsapps.com/start
+sso_region = eu-west-1
+sso_registration_scopes = sso:account:access
+
+[sso-session partner]
+sso_start_url = https://d-example2.awsapps.com/start
+sso_region = us-east-1
+
+[profile partner-ReadOnlyAccess]
+sso_session = partner
+sso_account_id = 222222222222
+sso_role_name = ReadOnlyAccess
+region = us-east-1
+cli_pager =
+
+##########################
+# ACME
+##########################
+
+[profile acme-prod-AdministratorAccess]
+sso_session = corp
+sso_account_id = 111111111111
+sso_role_name = AdministratorAccess
+region = eu-west-3
+cli_pager =
+
+[profile AdministratorAccess-333333333333]
+sso_session = corp
+sso_account_id = 333333333333
+sso_role_name = AdministratorAccess
+region = eu-west-1
+cli_pager =
+s3 =
+  addressing_style = path
+
+[profile acme-sandbox-PowerUserAccess]
+sso_session = corp
+sso_account_id = 999999999999
+sso_role_name = PowerUserAccess
+cli_pager =
+
+[profile split]
+sso_session = corp
+sso_account_id = 444444444444
+sso_role_name = ReadOnlyAccess
+region = eu-west-1
+cli_pager =
+
+# legacy inline SSO, no sso-session block
+[profile legacy]
+sso_start_url = https://legacy.awsapps.com/start
+sso_region = us-east-1
+sso_account_id = 666666666666
+sso_role_name = ReadOnly
+cli_pager =
+
+[profile default]
+region = eu-west-1
+cli_pager =
+
+[services local-dev]
+s3 =
+  endpoint_url = http://localhost:4566

@@ -56,7 +56,8 @@ npx awspick init zsh               # print the snippet
 | `awsx login` | `aws sso login` for the current profile's session |
 | `awsx export` | materialize real keys (`AWS_ACCESS_KEY_ID`, …) into the shell |
 | `awsx exec -- terraform plan` | run one command with the selection applied, without changing the shell |
-| `awsx doctor` | check the AWS CLI, the shell integration, and the config parser |
+| `awsx doctor` | check the AWS CLI, the shell integration, the config parser and the profile catalog |
+| `awsx profiles …` | manage `~/.aws/config` from a JSON catalog — see [Profile catalog](#profile-catalog) |
 
 Non-interactive: `--profile <name>`, `--region <name>`, `--keep-region`,
 `--no-region`, `--yes`, `--json`.
@@ -105,7 +106,61 @@ Writes are atomic, the file is `0600`, keys `awsx` does not know are preserved,
 and a corrupt file is a warning rather than a crash. It never contains
 credentials — profile names, regions and counters only.
 
-`awsx` never writes to `~/.aws/config` or `~/.aws/credentials`.
+`awsx` never writes `~/.aws/credentials`, and writes `~/.aws/config` only through
+`awsx profiles apply` (below).
+
+## Profile catalog
+
+Optional. `aws configure sso` names profiles `<Account>-<Role>`, people add their
+own names in `~/.aws/credentials`, and after a while the same account and role
+exist twice under two names. The catalog fixes the names in one JSON file and
+generates `~/.aws/config` from it. The picker does not need it and never reads it.
+
+```bash
+awsx profiles import            # build ~/.aws/profiles.json from your current files
+$EDITOR ~/.aws/profiles.json    # choose names, groups, regions
+awsx profiles apply --dry-run   # see what would change
+awsx profiles apply             # write ~/.aws/config (asks first)
+```
+
+- **import** folds duplicates by SSO session, account and role: a name you chose
+  is kept, names made by `aws configure sso` go to `former_names`, and an
+  `<account>-<role>` name (`acme-prod-admin`) is proposed when only those exist.
+  Account names come from SSO when you are logged in (`--offline` to skip).
+- **apply** shows the plan first, asks (or needs `--yes`), backs up to
+  `~/.aws/backup/<UTC stamp>/` (the last 20 are kept), and writes atomically. It
+  refuses when `~/.aws/config` was edited since the last apply, or holds profiles
+  the catalog does not know: `--adopt` brings them into the catalog, `--force`
+  drops them (they stay in the backup). A renamed profile keeps its picker
+  history, and lines of `~/.zshrc`/`~/.bashrc` that still use the old name are
+  pointed out.
+- **discover** adds the account/role pairs your SSO session reaches and the
+  catalog lacks, marked `"new": true` with a proposed name. Rename them, remove
+  `"new"`, then apply.
+- **credentials is never written.** Static keys stay there and never enter the
+  catalog. A profile defined there again wins over `~/.aws/config` (as in the AWS
+  CLI): `apply` and `doctor` list those sections for you to remove.
+
+Once you use the catalog, add profiles with `discover` rather than
+`aws configure sso`: anything written to `~/.aws/config` by hand is drift.
+
+The catalog holds account IDs and SSO portal URLs. It is `0600` and lives next to
+the files it generates (`$AWSX_PROFILES_FILE` to move it). Do not commit it.
+
+```jsonc
+{
+  "version": 1,
+  "sso_sessions": { "corp": { "sso_start_url": "https://…/start", "sso_region": "eu-west-1" } },
+  "defaults": { "sso_session": "corp", "cli_pager": "" },
+  "profiles": [
+    { "name": "acme-prod-admin", "group": "ACME", "account_name": "acme-prod",
+      "account_id": "111111111111", "role": "AdministratorAccess", "region": "eu-west-3",
+      "former_names": ["acme-prod-AdministratorAccess"] },
+    { "name": "ops-read", "extra": { "role_arn": "arn:aws:iam::222222222222:role/Read",
+                                     "source_profile": "acme-prod-admin" } }
+  ]
+}
+```
 
 ## Develop
 
@@ -122,4 +177,5 @@ test compares the parser against `aws configure list-profiles` on fixture files
 and skips itself if the AWS CLI is absent.
 
 Design rationale, including the options that were rejected, is in the repository at
-`.ai/adr/ADR-0001-aws-profile-region-switcher.md` (not shipped in the npm tarball).
+`.ai/adr/ADR-0001-aws-profile-region-switcher.md` and, for the profile catalog,
+`.ai/adr/ADR-0002-profile-catalog.md` (not shipped in the npm tarball).

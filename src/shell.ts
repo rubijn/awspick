@@ -21,6 +21,7 @@ export const PASSTHROUGH_COMMANDS = [
   'exec',
   'init',
   'doctor',
+  'profiles',
   'help',
   'version',
 ] as const;

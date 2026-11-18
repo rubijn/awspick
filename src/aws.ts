@@ -7,7 +7,9 @@
  */
 
 import { execFile, spawn } from 'node:child_process';
-import { statSync } from 'node:fs';
+import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 import type { AwsxConfig } from './store.ts';
 
@@ -207,6 +209,65 @@ export function runWithEnv(
     child.on('error', reject);
     child.on('close', (code, signal) => resolve(signal ? 1 : (code ?? 1)));
   });
+}
+
+/**
+ * Call an SSO portal operation with the bearer token in a 0600 file inside a 0700
+ * temp directory, passed as `--cli-input-json file://…`: never in argv, where `ps`
+ * would show it. The file is no more exposed than the cache file the token came
+ * from, and it is removed whatever happens.
+ */
+async function ssoCall(operation: string, input: Record<string, unknown>, region: string): Promise<Record<string, unknown>> {
+  const dir = mkdtempSync(join(tmpdir(), 'awsx-sso-'));
+  try {
+    const file = join(dir, 'input.json');
+    writeFileSync(file, JSON.stringify(input), { mode: 0o600 });
+    const { stdout, stderr, code } = await run([
+      'sso', operation, '--cli-input-json', `file://${file}`, '--region', region, '--output', 'json', '--no-cli-pager',
+    ]);
+    if (code !== 0) throw new Error(`aws sso ${operation}: ${firstUsefulLine(stderr)}`);
+    return JSON.parse(stdout || '{}') as Record<string, unknown>;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** Follow `nextToken` until the list is complete. */
+async function ssoPaged<T>(operation: string, listKey: string, input: Record<string, unknown>, region: string): Promise<T[]> {
+  const items: T[] = [];
+  let nextToken: string | undefined;
+  do {
+    const page = await ssoCall(operation, nextToken ? { ...input, nextToken } : input, region);
+    items.push(...((page[listKey] as T[] | undefined) ?? []));
+    nextToken = typeof page.nextToken === 'string' && page.nextToken !== '' ? page.nextToken : undefined;
+  } while (nextToken);
+  return items;
+}
+
+export type SsoAccount = { accountId: string; accountName: string };
+
+export async function ssoListAccounts(accessToken: string, region: string): Promise<SsoAccount[]> {
+  const list = await ssoPaged<{ accountId: string; accountName?: string }>('list-accounts', 'accountList', { accessToken }, region);
+  return list.map((a) => ({ accountId: a.accountId, accountName: a.accountName ?? '' }));
+}
+
+export async function ssoListAccountRoles(accessToken: string, region: string, accountId: string): Promise<string[]> {
+  const list = await ssoPaged<{ roleName: string }>('list-account-roles', 'roleList', { accessToken, accountId }, region);
+  return list.map((r) => r.roleName);
+}
+
+/** Run `fn` over `items` with at most `limit` calls in flight, keeping order. */
+export async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index] as T);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
 }
 
 function firstUsefulLine(stderr: string): string {

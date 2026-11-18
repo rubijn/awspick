@@ -27,3 +27,12 @@ export function awsxConfigPath(): string {
   const base = process.env.XDG_CONFIG_HOME || join(home(), '.config');
   return join(base, 'awsx', 'config.json');
 }
+
+/**
+ * The profile catalog (ADR-0002): $AWSX_PROFILES_FILE, else ~/.aws/profiles.json.
+ * Next to the files it generates, not in ~/.config/awsx: it holds account IDs
+ * and SSO portal URLs, which config.json is documented never to contain.
+ */
+export function catalogPath(): string {
+  return process.env.AWSX_PROFILES_FILE || join(home(), '.aws', 'profiles.json');
+}
