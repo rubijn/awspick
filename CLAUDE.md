@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 `awsx` is an interactive picker for `AWS_PROFILE` / `AWS_REGION`, published to npm as
 **`awspick`** with `awsx` as the `bin` name (bare `awsx` was taken on npm). Design
 rationale — including the options that were rejected and why — lives in
-`docs/adr/ADR-0001-aws-profile-region-switcher.md`. Read it before changing anything
+`.ai/adr/ADR-0001-aws-profile-region-switcher.md`. Read it before changing anything
 structural; it is the reason the code looks the way it does.
 
 ## Commands
