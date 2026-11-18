@@ -121,9 +121,19 @@ recency only breaks ties** — otherwise a stale favourite outranks an exact mat
 Search covers name, account ID and role name; every whitespace term must match
 (`src/fuzzy.ts`).
 
+### The profile catalog (`src/catalog/`)
+
+`awsx profiles` manages `~/.aws/config` from a JSON catalog (`~/.aws/profiles.json`,
+or `$AWSX_PROFILES_FILE`). `schema.ts` validates (every error at once, no credential
+keys, no value that would not survive a round trip), `render.ts` generates the file
+with a sha256 header used for drift detection, `import.ts` builds a catalog from the
+current files, `apply.ts` plans (pure) and writes. The picker never reads the
+catalog. Tests drive the real binary in a throwaway `HOME` — see `sandbox()` in
+`test/catalog-apply.test.ts`.
+
 ### Other invariants
 
-- `awsx` never writes to `~/.aws/config` or `~/.aws/credentials`.
+- Only `awsx profiles apply` writes `~/.aws/config`: it always shows the plan, refuses on drift unless `--adopt`/`--force`, backs up to `~/.aws/backup/<stamp>/` and writes atomically. Nothing in `awsx` ever writes `~/.aws/credentials`; shadowing sections are reported for the user to remove (ADR-0002, `.ai/adr/ADR-0002-profile-catalog.md`).
 - `awsx export` refuses to print credentials to a terminal unless the wrapper will eval them or `--print` is passed explicitly.
 - Exit codes: `0` selected, `1` error, `130` user cancelled — the wrapper must not eval on non-zero, so keep `CancelledError` mapping to 130.
 - **Esc quits.** The inquirer prompts have no cancel key, so `prompt()` in `src/picker.ts` watches stdin for a bare `0x1b` and aborts the prompt's `AbortSignal`; `AbortPromptError` and `ExitPromptError` both become `CancelledError`. The 40 ms `ESC_TIMEOUT_MS` debounce exists because arrow keys are *also* escape sequences — remove it and a `\x1b` arriving split from its `[A` suffix quits the picker mid-navigation. Any new prompt must go through `prompt()` to inherit this.

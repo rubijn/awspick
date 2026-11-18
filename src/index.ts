@@ -25,6 +25,7 @@ import {
   pickProfile,
   pickRegion,
 } from './picker.ts';
+import { profilesCommand } from './catalog/command.ts';
 import { loadAwsFiles, resolveProfiles, type Profile } from './profiles.ts';
 import { bold, cyan, describe, dim, green, red, yellow } from './render.ts';
 import { detectShell, initScript, installHint, isShell, renderEnv, selectionEnv, SHELLS, wrapperActive } from './shell.ts';
@@ -53,6 +54,7 @@ ${bold('Usage')}
   awsx exec -- <cmd>        run a command with the selection applied, no shell change
   awsx init <shell>         print the shell integration (${SHELLS.join(', ')})
   awsx doctor               check the AWS CLI, the shell wrapper and the config
+  awsx profiles <cmd>       manage ~/.aws/config from a JSON catalog (import, apply)
 
 ${bold('Options')}
   --profile <name>          non-interactive profile selection
@@ -119,6 +121,9 @@ async function main(argv: string[]): Promise<number> {
     out(VERSION);
     return 0;
   }
+  // Before the picker's own loading: it reads and writes files of its own, and
+  // must not prune remembered profiles that a rename is about to carry over.
+  if (command === 'profiles') return profilesCommand(positionals[1], values);
 
   const loaded = loadConfig();
   if (loaded.warning) say(yellow(`warning: ${loaded.warning}`));
@@ -195,6 +200,11 @@ function splitArgs(argv: string[]): { values: Values; positionals: string[]; exe
       region: { type: 'string' },
       shell: { type: 'string' },
       format: { type: 'string' },
+      // awsx profiles
+      'dry-run': { type: 'boolean' },
+      adopt: { type: 'boolean' },
+      force: { type: 'boolean' },
+      'default-session': { type: 'string' },
     },
   });
   return { values: values as Values, positionals, execArgs };
