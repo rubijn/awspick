@@ -72,3 +72,31 @@ export function humanizeRemaining(expiresAt: Date, now = new Date()): string {
   if (hours < 24) return `${hours}h`;
   return `${Math.floor(hours / 24)}d`;
 }
+
+/**
+ * The valid access token cached for this SSO start URL, or undefined (none, or
+ * expired). Used by `awsx profiles discover` only, and only handed to the AWS CLI
+ * through a 0600 file — never in argv, never logged (ADR-0002, "discover").
+ */
+export function readAccessToken(startUrl: string, dir = ssoCacheDir(), now = new Date()): string | undefined {
+  let entries: string[];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return undefined;
+  }
+  let best: { token: string; expiresAt: Date } | undefined;
+  for (const entry of entries) {
+    if (!entry.endsWith('.json')) continue;
+    try {
+      const record = JSON.parse(readFileSync(join(dir, entry), 'utf8')) as Record<string, unknown>;
+      if (record.startUrl !== startUrl || typeof record.accessToken !== 'string') continue;
+      const expiresAt = parseExpiry(record.expiresAt);
+      if (!expiresAt || expiresAt <= now) continue;
+      if (!best || expiresAt > best.expiresAt) best = { token: record.accessToken, expiresAt };
+    } catch {
+      continue;
+    }
+  }
+  return best?.token;
+}

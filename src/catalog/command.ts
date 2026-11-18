@@ -7,10 +7,12 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { mapLimit, ssoListAccountRoles, ssoListAccounts } from '../aws.ts';
 import { parseIni } from '../ini.ts';
 import { awsConfigPath, awsCredentialsPath, catalogPath } from '../paths.ts';
 import { confirmPrompt } from '../picker.ts';
 import { bold, dim, green, red, yellow } from '../render.ts';
+import { readAccessToken } from '../sso.ts';
 import { loadConfig, saveConfig } from '../store.ts';
 import {
   adoptOutside,
@@ -24,6 +26,7 @@ import {
   writeConfigAtomic,
   type ApplyPlan,
 } from './apply.ts';
+import { addDiscovered } from './discover.ts';
 import { importCatalog } from './import.ts';
 import { CatalogError, CREDENTIAL_KEYS, loadCatalog, saveCatalog } from './schema.ts';
 
@@ -35,8 +38,11 @@ const say = (text: string): void => {
 
 export const PROFILES_USAGE = `${bold('awsx profiles')} — manage ~/.aws/config from a JSON catalog (ADR-0002)
 
-  awsx profiles import [--force] [--default-session S]
+  awsx profiles import [--force] [--offline] [--default-session S]
       build the catalog from ~/.aws/config and ~/.aws/credentials
+      (account names come from SSO unless --offline)
+  awsx profiles discover [--session S] [--region R] [--dry-run]
+      add the account/role pairs your SSO session reaches, marked "new"
   awsx profiles apply [--dry-run] [--yes] [--adopt | --force]
       regenerate ~/.aws/config from the catalog; ~/.aws/credentials is never written
 
@@ -64,7 +70,9 @@ export async function profilesCommand(sub: string | undefined, values: Values): 
   try {
     switch (sub) {
       case 'import':
-        return importCmd(values);
+        return await importCmd(values);
+      case 'discover':
+        return await discoverCmd(values);
       case 'apply':
         return await applyCmd(values);
       case undefined:
@@ -85,18 +93,42 @@ export async function profilesCommand(sub: string | undefined, values: Values): 
   }
 }
 
-function importCmd(values: Values): number {
+/** Account ID -> name from SSO, or an empty map with the reason when it cannot be had. */
+async function accountNames(session: Record<string, string> | undefined, name: string | undefined): Promise<Map<string, string>> {
+  const startUrl = session?.sso_start_url;
+  const region = session?.sso_region;
+  if (!startUrl || !region || !name) return new Map();
+  const token = readAccessToken(startUrl);
+  if (!token) {
+    say(dim(`note: no valid SSO token for "${name}", so account names come from profile names (\`awsx login\` first, or --offline to silence this)`));
+    return new Map();
+  }
+  try {
+    return new Map((await ssoListAccounts(token, region)).map((a) => [a.accountId, a.accountName]));
+  } catch (err) {
+    say(dim(`note: account names not read from SSO (${(err as Error).message})`));
+    return new Map();
+  }
+}
+
+async function importCmd(values: Values): Promise<number> {
   const path = catalogPath();
   if (existsSync(path) && !values.force) {
     say(red(`${path} already exists; pass --force to replace it`));
     return 1;
   }
   const defaultSession = typeof values['default-session'] === 'string' ? values['default-session'] : undefined;
-  const { catalog, report } = importCatalog({
+  const input = {
     configText: readText(awsConfigPath()),
     credentialsText: readText(awsCredentialsPath()),
     ...(defaultSession ? { defaultSession } : {}),
-  });
+  };
+  let { catalog, report } = importCatalog(input);
+  if (!values.offline) {
+    const session = catalog.defaults.sso_session;
+    const names = await accountNames(session ? catalog.sso_sessions[session] : undefined, session);
+    if (names.size > 0) ({ catalog, report } = importCatalog({ ...input, accountNames: names }));
+  }
 
   if (report.errors.some((e) => /static keys in ~\/.aws\/config/.test(e))) {
     for (const e of report.errors) say(red(e));
@@ -117,6 +149,49 @@ function importCmd(values: Values): number {
     return 1;
   }
   say(dim('next: review the catalog, then `awsx profiles apply --dry-run`'));
+  return 0;
+}
+
+const DISCOVER_CONCURRENCY = 6;
+
+async function discoverCmd(values: Values): Promise<number> {
+  const path = catalogPath();
+  const catalog = loadCatalog(path, { externalProfiles: staticProfiles(readText(awsCredentialsPath())) });
+  const name = typeof values.session === 'string' ? values.session : catalog.defaults.sso_session;
+  const session = name === undefined ? undefined : catalog.sso_sessions[name];
+  if (name === undefined || session === undefined) {
+    say(red(`unknown SSO session ${name === undefined ? '(no --session and no defaults.sso_session)' : `"${name}"`}`));
+    return 1;
+  }
+  const { sso_start_url: startUrl, sso_region: ssoRegion } = session;
+  if (!startUrl || !ssoRegion) {
+    say(red(`session "${name}" has no sso_start_url or sso_region`));
+    return 1;
+  }
+  const token = readAccessToken(startUrl);
+  if (!token) {
+    say(red(`no valid SSO token for "${name}": run \`aws sso login --sso-session ${name}\` (or \`awsx login\`) first`));
+    return 1;
+  }
+
+  const accounts = await ssoListAccounts(token, ssoRegion);
+  const reachable = await mapLimit(accounts, DISCOVER_CONCURRENCY, async (a) => ({
+    ...a,
+    roles: await ssoListAccountRoles(token, ssoRegion, a.accountId),
+  }));
+  const region = typeof values.region === 'string' && values.region !== '' ? values.region : undefined;
+  const { catalog: next, added } = addDiscovered(catalog, name, reachable, region);
+
+  const pairs = reachable.reduce((n, a) => n + a.roles.length, 0);
+  say(`${bold(name)}: ${accounts.length} accounts, ${pairs} account/role pairs reachable, ${added.length} not in the catalog`);
+  for (const p of added) say(`  ${green('+')} ${bold(p.name)} ${dim(`${p.account_name || '…' + (p.account_id ?? '').slice(-4)} / ${p.role}`)}`);
+  if (added.length === 0) return 0;
+  if (values['dry-run']) {
+    say(dim('dry run: catalog unchanged'));
+    return 0;
+  }
+  saveCatalog(path, next);
+  say(`${green('✓')} added to ${bold(path)}, marked "new": rename them if you like, remove "new", then \`awsx profiles apply\``);
   return 0;
 }
 

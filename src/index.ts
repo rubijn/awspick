@@ -54,7 +54,7 @@ ${bold('Usage')}
   awsx exec -- <cmd>        run a command with the selection applied, no shell change
   awsx init <shell>         print the shell integration (${SHELLS.join(', ')})
   awsx doctor               check the AWS CLI, the shell wrapper and the config
-  awsx profiles <cmd>       manage ~/.aws/config from a JSON catalog (import, apply)
+  awsx profiles <cmd>       manage ~/.aws/config from a JSON catalog (import, discover, apply)
 
 ${bold('Options')}
   --profile <name>          non-interactive profile selection
@@ -205,6 +205,8 @@ function splitArgs(argv: string[]): { values: Values; positionals: string[]; exe
       adopt: { type: 'boolean' },
       force: { type: 'boolean' },
       'default-session': { type: 'string' },
+      offline: { type: 'boolean' },
+      session: { type: 'string' },
     },
   });
   return { values: values as Values, positionals, execArgs };
